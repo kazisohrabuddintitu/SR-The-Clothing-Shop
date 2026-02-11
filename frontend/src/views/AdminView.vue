@@ -1,9 +1,21 @@
 <script setup>
 import { onMounted, ref } from 'vue'
-import { api } from '../services/api'
+import { api, ensureCsrfCookie } from '../services/api'
 
 const products = ref([])
 const orders = ref([])
+const ordersLoading = ref(false)
+const ordersError = ref('')
+const filterFrom = ref('')
+const filterTo = ref('')
+const filterOrderId = ref('')
+const contactForm = ref({
+  email: '',
+  phone: '',
+  address: '',
+  hours: '',
+})
+const contactStatus = ref('')
 const imageFile = ref(null)
 const form = ref({
   id: null,
@@ -29,8 +41,64 @@ const loadProducts = async () => {
 }
 
 const loadOrders = async () => {
-  const { data } = await api.get('/admin/orders')
-  orders.value = data.orders
+  ordersLoading.value = true
+  ordersError.value = ''
+  try {
+    const params = {
+      from: filterFrom.value || undefined,
+      to: filterTo.value || undefined,
+      order_id: filterOrderId.value || undefined,
+    }
+    const { data } = await api.get('/admin/orders', { params })
+    orders.value = data.orders || []
+  } catch (error) {
+    const status = error?.response?.status
+    if (status === 401 || status === 403) {
+      ordersError.value = 'Admin access required. Please log in as admin.'
+    } else {
+      ordersError.value = 'Unable to load admin orders.'
+    }
+  } finally {
+    ordersLoading.value = false
+  }
+}
+
+const formatDate = (date) => date.toISOString().slice(0, 10)
+
+const resetFilters = () => {
+  const now = new Date()
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  filterFrom.value = formatDate(startOfMonth)
+  filterTo.value = formatDate(now)
+  filterOrderId.value = ''
+  loadOrders()
+}
+
+const loadContactInfo = async () => {
+  const { data } = await api.get('/contact-info')
+  contactForm.value = {
+    email: data.contact.email || '',
+    phone: data.contact.phone || '',
+    address: data.contact.address || '',
+    hours: data.contact.hours || '',
+  }
+}
+
+const saveContactInfo = async () => {
+  contactStatus.value = ''
+  try {
+    await ensureCsrfCookie()
+    const { data } = await api.put('/admin/contact-info', contactForm.value)
+    contactForm.value = {
+      email: data.contact.email || '',
+      phone: data.contact.phone || '',
+      address: data.contact.address || '',
+      hours: data.contact.hours || '',
+    }
+    contactStatus.value = 'Contact information updated.'
+  } catch (error) {
+    contactStatus.value = 'Unable to save contact info. Please refresh and try again.'
+  }
 }
 
 const resetForm = () => {
@@ -210,7 +278,8 @@ const onFileChange = (event) => {
 
 onMounted(() => {
   loadProducts()
-  loadOrders()
+  loadContactInfo()
+  resetFilters()
 })
 </script>
 
@@ -298,13 +367,57 @@ onMounted(() => {
     </div>
 
     <div class="card">
+      <h2>Contact settings</h2>
+      <form class="form" @submit.prevent="saveContactInfo">
+        <label>
+          Contact email
+          <input v-model="contactForm.email" type="email" />
+        </label>
+        <label>
+          Phone
+          <input v-model="contactForm.phone" />
+        </label>
+        <label>
+          Address
+          <input v-model="contactForm.address" />
+        </label>
+        <label>
+          Hours
+          <input v-model="contactForm.hours" placeholder="e.g. Mon-Fri 9am-6pm" />
+        </label>
+        <button class="btn" type="submit">Save contact info</button>
+        <p v-if="contactStatus" class="notice">{{ contactStatus }}</p>
+      </form>
+    </div>
+
+    <div class="card">
       <h2>Orders</h2>
-      <div v-if="orders.length === 0" class="muted">No orders yet.</div>
+      <div class="filters">
+        <label>
+          From
+          <input v-model="filterFrom" type="date" />
+        </label>
+        <label>
+          To
+          <input v-model="filterTo" type="date" />
+        </label>
+        <label>
+          Order #
+          <input v-model="filterOrderId" type="number" min="1" placeholder="e.g. 102" />
+        </label>
+        <div class="filter-actions">
+          <button class="btn btn--ghost" type="button" @click="loadOrders">Apply</button>
+          <button class="btn btn--ghost" type="button" @click="resetFilters">This month</button>
+        </div>
+      </div>
+      <div v-if="ordersLoading" class="muted">Loading orders...</div>
+      <div v-else-if="ordersError" class="notice">{{ ordersError }}</div>
+      <div v-else-if="orders.length === 0" class="muted">No orders yet.</div>
       <div v-else class="stack">
         <div v-for="order in orders" :key="order.id" class="order-card">
           <div class="order-card__header">
             <strong>Order #{{ order.id }}</strong>
-            <span class="muted">{{ order.user?.email }}</span>
+            <span class="muted">{{ order.user ? order.user.email : '' }}</span>
           </div>
           <p class="muted">Status: {{ order.status }}</p>
           <p class="muted">Total: ${{ Number(order.total).toFixed(2) }}</p>
@@ -312,7 +425,7 @@ onMounted(() => {
             <strong>Items</strong>
             <ul>
               <li v-for="item in order.items" :key="item.id">
-                {{ item.product?.name || 'Product' }} ({{ item.size }}) × {{ item.quantity }}
+                {{ item.product ? item.product.name : 'Product' }} ({{ item.size }}) × {{ item.quantity }}
                 - ${{ Number(item.price).toFixed(2) }}
               </li>
             </ul>

@@ -4,6 +4,8 @@ use App\Http\Controllers\Api\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Api\Admin\UploadController as AdminUploadController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
+use App\Http\Controllers\Api\ContactController;
+use App\Http\Controllers\Api\ContactInfoController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReviewController;
@@ -21,6 +23,8 @@ Route::prefix('auth')->group(function () {
 Route::get('products', [ProductController::class, 'index']);
 Route::get('products/{product}', [ProductController::class, 'show']);
 Route::get('products/{product}/reviews', [ReviewController::class, 'index']);
+Route::get('contact-info', [ContactInfoController::class, 'show']);
+Route::post('contact', [ContactController::class, 'store']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('cart', [CartController::class, 'show']);
@@ -43,4 +47,5 @@ Route::middleware(['auth:sanctum', 'admin'])->group(function () {
     Route::get('admin/orders', [AdminOrderController::class, 'index']);
     Route::patch('admin/orders/{order}/status', [AdminOrderController::class, 'updateStatus']);
     Route::post('admin/uploads', [AdminUploadController::class, 'store']);
+    Route::put('admin/contact-info', [ContactInfoController::class, 'update']);
 });

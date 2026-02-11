@@ -6,15 +6,30 @@ import { useSession } from '../stores/session'
 const { user } = useSession()
 const orders = ref([])
 const cart = ref(null)
+const loading = ref(false)
+const error = ref('')
 
 const loadData = async () => {
-  const [ordersRes, cartRes] = await Promise.all([
-    api.get('/orders'),
-    api.get('/cart'),
-  ])
+  loading.value = true
+  error.value = ''
+  try {
+    const [ordersRes, cartRes] = await Promise.all([
+      api.get('/orders'),
+      api.get('/cart'),
+    ])
 
-  orders.value = ordersRes.data.orders
-  cart.value = cartRes.data.cart
+    orders.value = ordersRes.data.orders
+    cart.value = cartRes.data.cart
+  } catch (err) {
+    const status = err?.response?.status
+    if (status === 401) {
+      error.value = 'Please log in again to view your orders.'
+    } else {
+      error.value = 'Unable to load dashboard data.'
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(loadData)
@@ -25,6 +40,9 @@ onMounted(loadData)
     <div class="page-header">
       <h1>Dashboard</h1>
     </div>
+
+    <p v-if="loading" class="muted">Loading...</p>
+    <p v-else-if="error" class="notice">{{ error }}</p>
 
     <div class="card">
       <h2>Welcome back</h2>
