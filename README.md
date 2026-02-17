@@ -29,6 +29,12 @@ docker compose exec app php artisan storage:link
 
 The API will be available at `http://localhost:8000`.
 
+## Filament admin panel
+Filament runs on the Laravel backend at:
+- `http://localhost:8000/admin`
+
+Use the admin credentials below to log in. Access is restricted to users with `is_admin = 1`.
+
 ## Frontend (local dev)
 ```bash
 cd frontend
